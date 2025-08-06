@@ -1,0 +1,8 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/*.log
+
+output.logstash:
+  hosts: ["{{ hostvars[groups['ELK_Server'][0]].ansible_host }}:{{ logstash_input_port }}"]

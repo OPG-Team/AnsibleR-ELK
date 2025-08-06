@@ -1,0 +1,6 @@
+---
+# vars file for roles/ELK
+
+
+elk_version: "8.15.0"
+elk_docker_network: "elk_net"

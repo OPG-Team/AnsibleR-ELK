@@ -1,0 +1,8 @@
+---
+# handlers file for roles/ELK
+
+
+- name: restart elk containers
+  community.docker.docker_compose:
+    project_src: "{{ playbook_dir }}"
+    restarted: true

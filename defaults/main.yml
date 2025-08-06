@@ -1,0 +1,11 @@
+---
+# defaults file for roles/ELK
+
+
+elk_heap_size: "1g"
+elk_network_host: "0.0.0.0"
+elk_server_port: 9200
+
+kibana_port: 5601
+
+logstash_input_port: 5044
