@@ -1,0 +1,86 @@
+---
+- name: Ensure local certs directory exists
+  delegate_to: localhost
+  run_once: true
+  file:
+    path: "{{ certs_dir }}"
+    state: directory
+    mode: 0700
+
+- name: Generate CA
+  delegate_to: localhost
+  run_once: true
+  command: "openssl req -x509 -newkey rsa:4096 -keyout {{ certs_dir }}/ca.key -out {{ certs_dir }}/ca.crt -days 3650 -nodes -subj '/CN=ELK-CA'"
+  args:
+    creates: "{{ certs_dir }}/ca.crt"
+
+- name: Create server config with SAN
+  delegate_to: localhost
+  run_once: true
+  template:
+    src: openssl-server.cnf.j2
+    dest: "{{ certs_dir }}/openssl-server.cnf"
+
+- name: Generate server certificate
+  delegate_to: localhost
+  run_once: true
+  command: >
+    openssl req -newkey rsa:2048 -nodes -keyout {{ certs_dir }}/server.key
+    -out {{ certs_dir }}/server.csr -config {{ certs_dir }}/openssl-server.cnf
+  args:
+    creates: "{{ certs_dir }}/server.csr"
+
+- name: Sign server certificate
+  delegate_to: localhost
+  run_once: true
+  command: >
+    openssl x509 -req -in {{ certs_dir }}/server.csr
+    -CA {{ certs_dir }}/ca.crt -CAkey {{ certs_dir }}/ca.key -CAcreateserial
+    -out {{ certs_dir }}/server.crt -days 365 -sha256 -extensions v3_req -extfile {{ certs_dir }}/openssl-server.cnf
+  args:
+    creates: "{{ certs_dir }}/server.crt"
+
+# === КЛИЕНТСКИЕ СЕРТИФИКАТЫ ===
+
+- name: Generate client keys
+  delegate_to: localhost
+  run_once: true
+  command: "openssl genrsa -out {{ certs_dir }}/{{ item }}.key 2048"
+  args:
+    creates: "{{ certs_dir }}/{{ item }}.key"
+  loop: "{{ groups['ELK_Client'] }}"
+
+- name: Generate client CSRs
+  delegate_to: localhost
+  run_once: true
+  command: "openssl req -new -key {{ certs_dir }}/{{ item }}.key -out {{ certs_dir }}/{{ item }}.csr -subj '/CN={{ item }}'"
+  args:
+    creates: "{{ certs_dir }}/{{ item }}.csr"
+  loop: "{{ groups['ELK_Client'] }}"
+
+- name: Create client config with clientAuth
+  delegate_to: localhost
+  run_once: true
+  template:
+    src: openssl-client.cnf.j2
+    dest: "{{ certs_dir }}/openssl-{{ item }}.cnf"
+  loop: "{{ groups['ELK_Client'] }}"
+
+- name: Sign client certificates
+  delegate_to: localhost
+  run_once: true
+  command: >
+    openssl x509 -req -in {{ certs_dir }}/{{ item }}.csr
+    -CA {{ certs_dir }}/ca.crt -CAkey {{ certs_dir }}/ca.key -CAcreateserial
+    -out {{ certs_dir }}/{{ item }}.crt -days 365
+    -extensions v3_req -extfile {{ certs_dir }}/openssl-{{ item }}.cnf
+  args:
+    creates: "{{ certs_dir }}/{{ item }}.crt"
+  loop: "{{ groups['ELK_Client'] }}"
+
+- name: Create fullchain certificate for server
+  delegate_to: localhost
+  run_once: true
+  shell: cat {{ certs_dir }}/server.crt {{ certs_dir }}/ca.crt > {{ certs_dir }}/fullchain.crt
+  args:
+    creates: "{{ certs_dir }}/fullchain.crt"

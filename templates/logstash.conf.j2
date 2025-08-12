@@ -1,24 +1,21 @@
 input {
   beats {
-    port => {{ logstash_input_port }}
-  }
-}
-
-filter {
-  if [fileset][module] == "nginx" {
-    grok {
-      match => { "message" => "%{COMBINEDAPACHELOG}" }
-    }
-    date {
-      match => [ "timestamp" , "dd/MMM/yyyy:HH:mm:ss Z" ]
-    }
+    port => 5044
+    ssl => true
+    ssl_certificate => "/etc/elk/certs/fullchain.crt"
+    ssl_key => "/etc/elk/certs/server.key"
+    ssl_certificate_authorities => ["/etc/elk/certs/ca.crt"]
+    ssl_verify_mode => "force_peer"
   }
 }
 
 output {
   elasticsearch {
-    hosts => ["http://elasticsearch:9200"]
+    hosts => ["https://elasticsearch:9200"]
     index => "logs-%{+YYYY.MM.dd}"
+    ssl => true
+    cacert => "/usr/share/logstash/config/certs/ca.crt"
+    user => "{{ logstash_username }}"
+    password => "{{ logstash_password }}"
   }
-  stdout { codec => rubydebug }
 }

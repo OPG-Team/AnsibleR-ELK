@@ -1,0 +1,32 @@
+---
+- name: Установка Filebeat
+  apt:
+    name: filebeat
+    state: present
+
+- name: Создать директорию для сертификатов
+  file:
+    path: /etc/filebeat/certs
+    state: directory
+    mode: 0755
+
+- name: Копировать клиентские сертификаты
+  copy:
+    src: "{{ certs_dir }}/{{ inventory_hostname }}.{{ item.ext }}"
+    dest: "/etc/filebeat/certs/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { ext: 'crt', dest: 'client.crt', mode: '0644' }
+    - { ext: 'key', dest: 'client.key', mode: '0600' }
+
+- name: Копировать CA сертификат
+  copy:
+    src: "{{ certs_dir }}/ca.crt"
+    dest: /etc/filebeat/certs/ca.crt
+    mode: 0644
+
+- name: Настроить Filebeat
+  template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+  notify: restart filebeat

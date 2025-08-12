@@ -2,7 +2,24 @@
 # handlers file for roles/ELK
 
 
-- name: restart elk containers
-  community.docker.docker_compose:
-    project_src: "{{ playbook_dir }}"
-    restarted: true
+- name: restart logstash
+  command: docker compose restart logstash
+  args:
+    chdir: /etc/elk
+
+- name: restart elk stack
+  command: docker compose down && docker compose up -d
+  args:
+    chdir: /etc/elk
+
+- name: restart filebeat
+  service:
+    name: filebeat
+    state: restarted
+    enabled: yes
+
+- name: create log user
+  command: docker exec -it elk-elasticsearch-1 bin/elasticsearch-users useradd {{ logstash_username }} -p {{ logstash_password }} -r superuser
+
+- name: create kiba user
+  command: docker exec -it elk-elasticsearch-1 bin/elasticsearch-users useradd {{ kibana_username }} -p {{ kibana_password }} -r kibana_system

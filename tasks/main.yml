@@ -1,116 +1,17 @@
 ---
 # tasks file for roles/ELK
 
+- name: Set global variables
+  set_fact:
+    certs_dir: "{{ certs_dir | default('/tmp/elk_certs') }}"
+    elk_server_hostname: "{{ groups['ELK_Server'][0] }}"
 
-- name: "ELK server setup"
+- include_tasks: generate_certs.yml
+  run_once: true
+
+- include_tasks: server.yml
   when: "'ELK_Server' in group_names"
-  block:
 
-    - name: install docker sdk for python
-      ansible.builtin.pip:
-        name: docker
-        state: present
-
-    - name: создать docker network
-      community.docker.docker_network:
-        name: "{{ elk_docker_network }}"
-        state: present
-
-    - name: запустить elasticsearch
-      community.docker.docker_container:
-        name: elasticsearch
-        image: docker.elastic.co/elasticsearch/elasticsearch:{{ elk_version }}
-        restart_policy: always
-        env:
-          discovery.type: "single-node"
-          network.host: "0.0.0.0"
-          xpack.security.enabled: "false"
-          xpack.security.http.ssl.enabled: "false"
-          ES_JAVA_OPTS: "-Xms{{ elk_heap_size }} -Xmx{{ elk_heap_size }}"
-        ulimits:
-          - nofile:65536:65536
-        networks:
-          - name: "{{ elk_docker_network }}"
-        ports:
-          - "9200:9200"
-        volumes:
-          - elastic_data:/usr/share/elasticsearch/data
-
-    - name: запустить kibana
-      community.docker.docker_container:
-        name: kibana
-        image: docker.elastic.co/kibana/kibana:{{ elk_version }}
-        restart_policy: always
-        env:
-          ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
-          # если в будущем security включишь — добавь ELASTICSEARCH_USERNAME/ELASTICSEARCH_PASSWORD
-        networks:
-          - name: "{{ elk_docker_network }}"
-        ports:
-          - "{{ kibana_port }}:5601"
-
-    - name: скопировать конфиг logstash на хост
-      template:
-        src: logstash.conf.j2
-        dest: /tmp/logstash.conf
-        mode: '0644'
-
-    - name: запустить logstash
-      community.docker.docker_container:
-        name: logstash
-        image: docker.elastic.co/logstash/logstash:{{ elk_version }}
-        restart_policy: always
-        env:
-          xpack.security.enabled: "false"
-          xpack.security.http.ssl.enabled: "false"
-          network.host: "0.0.0.0"
-          discovery.type: "single-node"
-        networks:
-          - name: "{{ elk_docker_network }}"
-        ports:
-          - "{{ logstash_input_port }}:5044"
-        volumes:
-          - /tmp/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
-
-- name: "Filebeat client setup"
+- include_tasks: clients.yml
   when: "'ELK_Client' in group_names"
-  block:
-    - name: установить утилиты для добавления репозитория
-      ansible.builtin.apt:
-        name:
-          - apt-transport-https
-          - wget
-          - gnupg
-        state: present
-        update_cache: yes
 
-    - name: добавить ключ GPG Elastic
-      ansible.builtin.apt_key:
-        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
-        state: present
-
-    - name: добавить репозиторий Elastic
-      ansible.builtin.apt_repository:
-        repo: "deb https://artifacts.elastic.co/packages/8.x/apt stable main"
-        state: present
-
-    - name: обновить кэш apt
-      ansible.builtin.apt:
-        update_cache: yes
-
-    - name: установить filebeat
-      ansible.builtin.apt:
-        name: filebeat
-        state: present
-
-    - name: скопировать конфиг filebeat
-      ansible.builtin.template:
-        src: filebeat.yml.j2
-        dest: /etc/filebeat/filebeat.yml
-        mode: '0644'
-
-    - name: включить и запустить filebeat
-      ansible.builtin.systemd:
-        name: filebeat
-        state: started
-        enabled: true

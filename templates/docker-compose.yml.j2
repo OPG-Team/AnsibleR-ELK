@@ -1,0 +1,66 @@
+version: '3'
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:{{ elk_version }}
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.enrollment.enabled=true
+      - xpack.security.http.ssl.keystore.path=/usr/share/elasticsearch/config/certs/elasticsearch-keystore.p12
+      - xpack.security.http.ssl.keystore.password=NtdA5962
+      - ELASTIC_PASSWORD=NtdA5962
+    volumes:
+      - {{ ssl_log_dir }}:/usr/share/elasticsearch/config/certs
+    networks:
+      - elk_net
+
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:{{ elk_version }}
+    ports:
+      - "5044:5044"
+    volumes:
+      - {{ certs_dir }}:{{ certs_dir }}
+      - {{ ssl_log_dir }}:/usr/share/logstash/config/certs
+      - /etc/logstash/conf.d:/usr/share/logstash/pipeline
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+      xpack.monitoring.enabled: "true"
+      xpack.monitoring.elasticsearch.hosts: "https://elasticsearch:9200"
+      xpack.monitoring.elasticsearch.username: "logstash_internal"
+      xpack.monitoring.elasticsearch.password: "NtdA5962"
+      xpack.monitoring.elasticsearch.ssl.certificate_authority: "/usr/share/logstash/config/certs/ca.crt"
+
+    networks:
+      - elk_net
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:{{ elk_version }}
+    environment:
+      ELASTICSEARCH_HOSTS: "https://elasticsearch:9200"
+      ELASTICSEARCH_USERNAME: {{ kibana_username }}
+      ELASTICSEARCH_PASSWORD: {{ kibana_password }}
+      ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES: "/usr/share/kibana/config/certs/ca.crt"
+      elasticsearch.ssl.verificationMode: "full"
+      ELASTICSEARCH_SSL_ALWAYSPRESENTCERTIFICATE: "true"
+      xpack.security.encryptionKey: "f9d3b7e1c4a28f6d5e07b19c3a5f4820"
+      xpack.encryptedSavedObjects.encryptionKey: "7a2c4e8f6d1b09a5c3e7f42d19b068ac"
+      xpack.reporting.encryptionKey: "e5f8a3c17b0649d2f8e7b1a6c0349d0f"
+    ports:
+      - "5601:5601"
+
+    networks:
+      - elk_net
+    depends_on:
+      - elasticsearch
+    volumes:
+      - {{ ssl_log_dir }}:/usr/share/kibana/config/certs
+
+
+networks:
+  elk_net:
+    driver: bridge

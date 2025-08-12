@@ -5,4 +5,9 @@ filebeat.inputs:
       - /var/log/*.log
 
 output.logstash:
-  hosts: ["{{ hostvars[groups['ELK_Server'][0]].ansible_host }}:{{ logstash_input_port }}"]
+  hosts: ["89.169.15.20:5044"]
+  ssl.enabled: true
+  ssl.certificate_authorities: ["/etc/filebeat/certs/ca.crt"]
+  ssl.certificate: "/etc/filebeat/certs/client.crt"
+  ssl.key: "/etc/filebeat/certs/client.key"
+  ssl.verification_mode: "full"  # Добавьте эту строку
